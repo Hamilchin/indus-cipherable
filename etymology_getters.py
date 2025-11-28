@@ -39,7 +39,7 @@ def get_all_starling_proto_dravidian():
             if entry:
                 entries.append(entry)
         
-        time.sleep(1)
+        time.sleep(0.3)
 
     return entries
 
@@ -48,4 +48,4 @@ def save_proto_dravidian_json(filepath):
     with open(filepath, 'w') as f:
         json.dump(entries, f, ensure_ascii=False, indent=4)
 
-save_proto_dravidian_json('proto_dravidian.json')
+save_proto_dravidian_json('data/proto_dravidian.json')
