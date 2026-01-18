@@ -1,24 +1,20 @@
 import json
-import csv
+from pathlib import Path
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 
 """
 indus_symbols = {
     "1": {
-        "frequencies": {
-            "SOL": 127,
-            "INI": 127,
-            "MED": 127,
-            "FIN": 127,
-            "TOT": 127
-        },
         "type": "basic",
-        "human_interpretations": ["fish", "water", "aquatic"],
-        "human_confidence": 0.9,
+        "interpretations": ["fish", "water", "aquatic"],
+        "confidence": 0.9,
         "possible_proto_dravidian": ["*mīn", "*nīr"]
     },
     "2": {
         "type": "composite"
-        "components": ["1", "2"]
+        "components": ["1", "2"]z
     }
 }
 """
@@ -32,145 +28,149 @@ def save_symbol_data(data, path="data/symbols.json"):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-def init_from_freq_csv(path="data/IM77_symbol_freq.csv"):
-    indus_symbols = {}
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            id = row[0]
-            frequencies = {
-                "SOL": row[1],
-                "INI": row[2],
-                "MED": row[3],
-                "FIN": row[4],
-                "TOT": row[5]
-            }
-            indus_symbols[id] = {"frequencies": frequencies}
+# def init_from_freq_csv(path="data/IM77_symbol_freq.csv"):
+#     indus_symbols = {}
+#     with open(path, "r", encoding="utf-8") as f:
+#         reader = csv.reader(f)
+#         next(reader)
+#         for row in reader:
+#             id = row[0]
+#             frequencies = {
+#                 "SOL": row[1],
+#                 "INI": row[2],
+#                 "MED": row[3],
+#                 "FIN": row[4],
+#                 "TOT": row[5]
+#             }
+#             indus_symbols[id] = {"frequencies": frequencies}
 
-    return indus_symbols
+#     return indus_symbols
 
-
-def print_symbol(symbol_id, symbol_data):
-    """Display a symbol's data clearly."""
-    print(f"\n{'='*50}")
-    print(f"  SYMBOL: {symbol_id}")
-    print(f"{'='*50}")
-    
-    freq = symbol_data.get("frequencies", {})
-    print(f"  Frequencies: TOT={freq.get('TOT', '?')} | SOL={freq.get('SOL', '?')} INI={freq.get('INI', '?')} MED={freq.get('MED', '?')} FIN={freq.get('FIN', '?')}")
-    
-    conf = symbol_data.get("human_confidence")
-    conf_str = f"{conf:.0%}" if conf is not None else "—"
-    print(f"  Confidence: {conf_str}")
-    
-    interps = symbol_data.get("human_interpretations", [])
-    if interps:
-        print(f"  Interpretations: {', '.join(interps)}")
-    else:
-        print(f"  Interpretations: (none)")
-    print(f"{'='*50}\n")
-
+def show_symbols(sids):
+    images, labels = [], []
+    for sid in sids:
+        path = Path(f"data/symbol_images/{sid}.gif")
+        if not path.exists():
+            print(f"Warning: {path} not found")
+            continue
+        images.append(mpimg.imread(path))
+        labels.append(sid)
+    if not images:
+        return
+    ratios = [img.shape[1] / img.shape[0] for img in images]
+    fig, axes = plt.subplots(1, len(images), figsize=(sum(ratios) * 1.2, 1.2),
+                             gridspec_kw={"width_ratios": ratios, "wspace": 0.05})
+    if len(images) == 1:
+        axes = [axes]
+    for ax, img, label in zip(axes, images, labels):
+        ax.imshow(img, cmap="gray")
+        ax.set_xlabel(label, fontsize=8)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+    plt.show()
 
 def repl():
-    """Interactive REPL for managing symbol interpretations."""
-    data = load_symbol_data()
-    print(f"\n🔣 Loaded {len(data)} symbols.\n")
-    
+    def print_symbol(sid):
+        if sid not in data:
+            print(f"Symbol {sid} not found.")
+            return
+        print(f"\n=== Symbol {sid} ===")
+        for k, v in data[sid].items():
+            if v: 
+                print(f"  {k}: {v}")
+        print()
+
+    def parse_list_arg(arg):
+        to_add, to_remove = [], []
+        for item in arg.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            if item.startswith("-"):
+                to_remove.append(item[1:].strip())
+            else:
+                to_add.append(item)
+        return to_add, to_remove
+
+    try:
+        data = load_symbol_data()
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+
     while True:
-        cmd = input(">>> ").strip()
-        
+        try:
+            cmd = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
         if not cmd:
             continue
-        
         if cmd in ("q", "quit", "exit"):
-            print("Goodbye.")
             break
-        
-        if cmd in ("h", "help"):
+
+        if cmd == "help":
             print("""
 Commands:
-  <id>                  - View symbol by ID
-  <id> i <words...>     - Add/remove interpretations (prefix with - to remove)
-                          e.g., "234 i fish, ball, -shoe, -deer"
-  <id> c <0-1>          - Set confidence (e.g., "1 c 0.8")
-  list                  - List all symbols with interpretations
-  q / quit              - Exit
+  <id>                       — View symbol properties
+  show <id> [id2] ...        — Display symbols in a window
+  <id> interpretations a,b,-c — Add/remove interpretations (- prefix removes)
+  <id> confidence <0-1>      — Set confidence level
+  <id> type <type>           — Set symbol type
+  <id> components a,b,-c     — Add/remove components (- prefix removes)
+  list                       — List all symbols
+  help                       — Show this help
+  q / quit / exit            — Exit
 """)
             continue
-        
+
         if cmd == "list":
-            has_interps = [(k, v) for k, v in data.items() if v.get("human_interpretations")]
-            if not has_interps:
-                print("No symbols have interpretations yet.")
-            else:
-                print(f"\n{'ID':<8} {'INTERPRETATIONS'}")
-                print("-" * 40)
-                for sid, sdata in sorted(has_interps, key=lambda x: int(x[0]) if x[0].isdigit() else x[0]):
-                    interps = ", ".join(sdata.get("human_interpretations", []))
-                    print(f"{sid:<8} {interps}")
-                print()
+            for sid in data:
+                print_symbol(sid)
             continue
-        
-        parts = cmd.split(maxsplit=1)
-        symbol_id = parts[0]
-        
-        if symbol_id not in data:
-            print(f"Symbol '{symbol_id}' not found.")
+
+        if cmd.startswith("show "):
+            show_symbols(cmd.split()[1:])
             continue
-        
-        # View only
+
+        parts = cmd.split(maxsplit=2)
+        sid = parts[0]
+
         if len(parts) == 1:
-            print_symbol(symbol_id, data[symbol_id])
+            print_symbol(sid)
             continue
-        
-        arg = parts[1].strip()
-        
-        # Set confidence: "<id> c <value>"
-        if arg.startswith("c "):
-            try:
-                conf = float(arg[2:].strip())
-                if not 0 <= conf <= 1:
-                    print("Confidence must be between 0 and 1.")
-                    continue
-                data[symbol_id]["human_confidence"] = conf
-                save_symbol_data(data)
-                print(f"✓ Set confidence to {conf:.0%}")
-            except ValueError:
-                print("Invalid number. Use: <id> c <0-1>")
-                continue
-        
-        # Add/remove interpretations: "<id> i <words...>"
-        elif arg.startswith("i "):
-            if "human_interpretations" not in data[symbol_id]:
-                data[symbol_id]["human_interpretations"] = []
-            interps = data[symbol_id]["human_interpretations"]
-            
-            words = [word.strip() for word in arg[2:].strip().split(",")]
-            added, removed = [], []
-            for w in words:
-                if w.startswith("-"):
-                    target = w[1:]
-                    if target in interps:
-                        interps.remove(target)
-                        removed.append(target)
-                else:
-                    if w not in interps:
-                        interps.append(w)
-                        added.append(w)
-            
-            if added or removed:
-                save_symbol_data(data)
-                if added:
-                    print(f"✓ Added: {', '.join(added)}")
-                if removed:
-                    print(f"✓ Removed: {', '.join(removed)}")
-        
+
+        action, arg = parts[1], parts[2] if len(parts) > 2 else ""
+        if sid not in data:
+            data[sid] = {}
+        sym = data[sid]
+
+        if action == "interpretations":
+            current = sym.get("interpretations", [])
+            to_add, to_remove = parse_list_arg(arg)
+            current = [x for x in current if x not in to_remove]
+            current.extend(x for x in to_add if x not in current)
+            sym["interpretations"] = current
+
+        elif action == "confidence":
+            sym["confidence"] = float(arg)
+
+        elif action == "type":
+            sym["type"] = arg
+
+        elif action == "components":
+            current = sym.get("components", [])
+            to_add, to_remove = parse_list_arg(arg)
+            current = [x for x in current if x not in to_remove]
+            current.extend(x for x in to_add if x not in current)
+            sym["components"] = current
+
         else:
-            print("Unknown command. Use 'h' for help.")
+            print(f"Unknown action: {action}")
             continue
-        
-        print_symbol(symbol_id, data[symbol_id])
+
+        save_symbol_data(data)
+        print_symbol(sid)
 
 
 if __name__ == "__main__":
